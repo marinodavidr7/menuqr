@@ -4,13 +4,15 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle2, Clock, ChefHat, Bike, Utensils, BellRing,
-  ReceiptText, AlertCircle, ChevronLeft, RefreshCw, ShieldCheck
+  ReceiptText, AlertCircle, ChevronLeft, RefreshCw, ShieldCheck,
+  ShoppingBag, Plus, UtensilsCrossed
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { QuickCallModal } from '@/components/QuickCallModal';
 import { Toast } from '@/components/Toast';
 import { Order, OrderStatus, Table } from '@/lib/types';
 import { formatPrice, formatTime, minutesElapsed } from '@/lib/formatters';
+import { useCartStore } from '@/lib/cart-store';
 
 interface PageProps {
   params: Promise<{ slug: string; orderId: string }>;
@@ -26,12 +28,25 @@ export default function OrderStatusPage({ params }: PageProps) {
   const [callModal, setCallModal] = useState<'waiter' | 'bill' | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const setTableCart = useCartStore((s) => s.setTable);
+  const updateActiveOrderStatus = useCartStore((s) => s.updateActiveOrderStatus);
+  const activeOrders = useCartStore((s) => s.activeOrders);
+
   const fetchOrder = async () => {
     try {
       const res = await fetch(`/api/orders?orderId=${orderId}`);
       if (!res.ok) throw new Error('Pedido no encontrado');
       const data = await res.json();
-      setOrder(data.order);
+      const o = data.order;
+      setOrder(o);
+
+      // Si es de salón y tiene mesa, persistirla en el carrito para que nunca se pierda
+      if (o.table_id && o.table_label) {
+        setTableCart(o.table_id, o.table_number, o.table_label);
+      }
+      if (o.status) {
+        updateActiveOrderStatus(o.id, o.status);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -212,6 +227,70 @@ export default function OrderStatusPage({ params }: PageProps) {
             </div>
           )}
         </div>
+
+        {/* Tarjeta Destacada: ¿Querés pedir algo más para la mesa? */}
+        <div className="bg-gradient-to-r from-brand-blue/20 via-surface to-brand-amber/10 border border-brand-blue/40 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-brand-blue text-white flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-blue/25">
+              <UtensilsCrossed className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-white">
+                {order.channel === 'salon'
+                  ? `¿Querés pedir algo más para ${order.table_label || 'tu mesa'}?`
+                  : '¿Deseás sumar algo más a tu pedido?'}
+              </h3>
+              <p className="text-xs text-text-secondary mt-0.5">
+                {order.channel === 'salon'
+                  ? 'Tu mesa sigue abierta. Podés pedir postres, bebidas o nuevos platos a la cuenta en cualquier momento.'
+                  : 'Podés pedir más platos que se marcharán inmediatamente a la cocina.'}
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href={`/${slug}${tables.find((t) => t.id === order.table_id)?.qr_token ? `?mesa=${tables.find((t) => t.id === order.table_id)?.qr_token}` : ''}`}
+            className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-xl bg-brand-blue hover:bg-brand-blue-hover text-white text-sm font-black flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-blue/30 active:scale-95 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Agregar más platos a la mesa</span>
+          </Link>
+        </div>
+
+        {/* Historial de Comandas en la misma mesa si hay más de una */}
+        {activeOrders.filter((o) => o.id !== order.id).length > 0 && (
+          <div className="bg-surface border border-surface-border rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+            <h3 className="text-xs font-black uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
+              <span>Otras comandas activas en tu mesa</span>
+            </h3>
+            <div className="flex flex-col divide-y divide-surface-border">
+              {activeOrders
+                .filter((o) => o.id !== order.id)
+                .map((ao) => (
+                  <Link
+                    key={ao.id}
+                    href={`/${slug}/pedido/${ao.id}`}
+                    className="py-2.5 flex items-center justify-between hover:bg-surface-subtle transition-colors rounded-lg px-2 -mx-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">
+                        Comanda #{ao.orderNumber || ao.id.slice(-6).toUpperCase()}
+                      </span>
+                      <span className="text-[11px] text-text-muted">
+                        ({ao.itemCount} platos)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums text-xs font-black text-brand-blue">
+                        {formatPrice(ao.totalCents)}
+                      </span>
+                      <span className="text-[10px] text-brand-blue font-bold">Ver estado →</span>
+                    </div>
+                  </Link>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Detalle de los Platos */}
         <div className="bg-surface border border-surface-border rounded-2xl p-5 shadow-sm flex flex-col gap-3">

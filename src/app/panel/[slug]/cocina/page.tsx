@@ -298,9 +298,16 @@ export default function KitchenPanelPage({ params }: PageProps) {
                     : 'bg-surface-subtle border-surface-border text-white'
                 }`}>
                   <div>
-                    <h3 className="font-black text-xl tracking-tight">
-                      {order.channel === 'salon' ? order.table_label || 'Mesa' : order.channel === 'delivery' ? '🛵 Delivery' : '🛍️ Take Away'}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-xl tracking-tight">
+                        {order.channel === 'salon' ? order.table_label || 'Mesa' : order.channel === 'delivery' ? '🛵 Delivery' : '🛍️ Take Away'}
+                      </h3>
+                      {order.channel === 'salon' && orders.some((o) => o.id !== order.id && o.table_id === order.table_id) && (
+                        <span className="px-2 py-0.5 rounded-full bg-brand-amber/25 border border-brand-amber/40 text-brand-amber text-[10px] font-black uppercase tracking-wider animate-pulse">
+                          Tanda extra
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs font-mono opacity-80">
                       #{order.id.slice(-4).toUpperCase()} · {formatTime(order.created_at)}
                     </span>

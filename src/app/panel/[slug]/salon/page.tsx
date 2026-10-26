@@ -31,7 +31,7 @@ export default function SalonPanelPage({ params }: PageProps) {
 
   // Modales
   const [ticketOrder, setTicketOrder] = useState<Order | null>(null);
-  const [selectedTable, setSelectedTable] = useState<{ table: Table; order?: Order; call?: Call } | null>(null);
+  const [selectedTable, setSelectedTable] = useState<{ table: Table; order?: Order; orders?: Order[]; call?: Call } | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
 
   // Registro de alertas para sonido
@@ -128,6 +128,31 @@ export default function SalonPanelPage({ params }: PageProps) {
       await handleUpdateStatus(orderId, 'cancelled');
       setCancelModalOrder(null);
     } catch {}
+  };
+
+  // Imprimir ticket consolidado de la mesa (todas las tandas)
+  const handlePrintTableTicket = (tableOrders: Order[], table: Table) => {
+    if (tableOrders.length === 0) return;
+    const combinedItems = tableOrders.flatMap((o) => o.items || []);
+    const totalCents = tableOrders.reduce((sum, o) => sum + o.total_cents, 0);
+    const subtotalCents = tableOrders.reduce((sum, o) => sum + o.subtotal_cents, 0);
+    const consolidatedOrder: Order = {
+      ...tableOrders[0],
+      id: `MESA-${table.label || table.number || 'SALON'}`,
+      items: combinedItems,
+      total_cents: totalCents,
+      subtotal_cents: subtotalCents,
+    };
+    setTicketOrder(consolidatedOrder);
+    setSelectedTable(null);
+  };
+
+  // Cerrar todas las comandas de una mesa
+  const handleCloseAllTableOrders = async (tableOrders: Order[]) => {
+    for (const o of tableOrders) {
+      await handleUpdateStatus(o.id, 'closed');
+    }
+    setSelectedTable(null);
   };
 
   // Filtrado de pedidos
@@ -567,22 +592,26 @@ export default function SalonPanelPage({ params }: PageProps) {
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {zoneTables.map((table) => {
-                  // Buscar pedido activo en esta mesa
-                  const tableOrder = orders.find(
+                  // Buscar TODOS los pedidos activos en esta mesa
+                  const tableOrders = orders.filter(
                     (o) => o.table_id === table.id && o.status !== 'closed' && o.status !== 'cancelled'
                   );
+                  const tableOrder = tableOrders[0];
+                  const totalTableCents = tableOrders.reduce((sum, o) => sum + o.total_cents, 0);
+                  const totalTableItems = tableOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0);
+                  const isAnyReady = tableOrders.some((o) => o.status === 'ready');
                   // Buscar llamado activo en esta mesa
                   const tableCall = calls.find((c) => c.table_id === table.id);
 
-                  const isOccupied = Boolean(tableOrder);
-                  const isReady = tableOrder?.status === 'ready';
+                  const isOccupied = tableOrders.length > 0;
+                  const isReady = isAnyReady;
                   const hasCall = Boolean(tableCall);
                   const isBill = tableCall?.type === 'bill';
 
                   return (
                     <div
                       key={table.id}
-                      onClick={() => setSelectedTable({ table, order: tableOrder, call: tableCall })}
+                      onClick={() => setSelectedTable({ table, order: tableOrder, orders: tableOrders, call: tableCall })}
                       className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between min-h-[130px] shadow-sm select-none active:scale-98 ${
                         hasCall
                           ? isBill
@@ -619,14 +648,21 @@ export default function SalonPanelPage({ params }: PageProps) {
                       <div className="py-2">
                         {isOccupied && tableOrder ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-text-primary truncate">
-                              {tableOrder.customer_name || 'Comensal'}
-                            </span>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-text-primary truncate">
+                                {tableOrder.customer_name || 'Comensal'}
+                              </span>
+                              {tableOrders.length > 1 && (
+                                <span className="px-1.5 py-0.2 bg-brand-amber/20 text-brand-amber font-extrabold text-[10px] rounded whitespace-nowrap">
+                                  {tableOrders.length} comandas
+                                </span>
+                              )}
+                            </div>
                             <span className="tabular-nums text-xs font-black text-brand-blue">
-                              {formatPrice(tableOrder.total_cents)}
+                              {formatPrice(totalTableCents)}
                             </span>
                             <span className="text-[10px] text-text-muted">
-                              {tableOrder.items?.length || 0} platos · {minutesElapsed(tableOrder.created_at)} min
+                              {totalTableItems} platos totales · {minutesElapsed(tableOrder.created_at)} min
                             </span>
                           </div>
                         ) : (
@@ -697,76 +733,147 @@ export default function SalonPanelPage({ params }: PageProps) {
               </div>
             )}
 
-            {/* Pedido Activo */}
-            {selectedTable.order ? (
-              <div className="flex flex-col gap-3 overflow-y-auto pr-1">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-text-secondary">Comensal: <strong className="text-white">{selectedTable.order.customer_name || 'Sin nombre'}</strong></span>
-                  <span className="text-text-muted font-mono">#{selectedTable.order.id.slice(-4).toUpperCase()}</span>
-                </div>
+            {/* Pedidos Activos de la Mesa (Soporta múltiples comandas/tandas) */}
+            {(() => {
+              const tableOrders = selectedTable.orders && selectedTable.orders.length > 0
+                ? selectedTable.orders
+                : selectedTable.order
+                ? [selectedTable.order]
+                : [];
 
-                <div className="p-3 bg-surface-subtle rounded-xl border border-surface-border flex flex-col gap-2 text-xs">
-                  {(selectedTable.order.items || []).map((it) => (
-                    <div key={it.id} className="flex justify-between items-center">
-                      <span><strong>{it.quantity}x</strong> {it.name_snapshot}</span>
-                      <span className="tabular-nums font-semibold">{formatPrice(it.unit_price_cents * it.quantity)}</span>
+              if (tableOrders.length === 0) {
+                return (
+                  <div className="py-8 text-center text-xs text-text-muted">
+                    La mesa está libre actualmente. Cuando el comensal escanee el QR y pida, aparecerá aquí.
+                  </div>
+                );
+              }
+
+              const totalConsolidado = tableOrders.reduce((sum, o) => sum + o.total_cents, 0);
+              const allDelivered = tableOrders.every((o) => o.status === 'delivered' || o.status === 'closed');
+
+              return (
+                <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+                  {/* Banner Consolidado si hay más de 1 pedido */}
+                  {tableOrders.length > 1 && (
+                    <div className="p-3 bg-brand-blue/15 border border-brand-blue/40 rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-extrabold text-white block">
+                          Consumo Total ({tableOrders.length} comandas/tandas)
+                        </span>
+                        <span className="text-[11px] text-text-muted">
+                          Mesa {selectedTable.table.label}
+                        </span>
+                      </div>
+                      <span className="tabular-nums font-black text-brand-blue text-base">
+                        {formatPrice(totalConsolidado)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Listado de Comandas */}
+                  {tableOrders.map((ord, idx) => (
+                    <div key={ord.id} className="p-3 bg-surface-subtle rounded-xl border border-surface-border flex flex-col gap-2 text-xs">
+                      <div className="flex justify-between items-center pb-1 border-b border-surface-border/50">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-white">
+                            Tanda #{idx + 1}
+                          </span>
+                          <span className="text-[11px] font-mono text-text-muted">
+                            #{ord.id.slice(-4).toUpperCase()}
+                          </span>
+                          <span className="text-[10px] text-text-muted">
+                            · {formatTime(ord.created_at)}
+                          </span>
+                        </div>
+
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          ord.status === 'confirmed' ? 'bg-blue-500/20 text-blue-400' :
+                          ord.status === 'in_kitchen' ? 'bg-amber-500/20 text-amber-400' :
+                          ord.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 animate-pulse' :
+                          'bg-purple-500/20 text-purple-400'
+                        }`}>
+                          {ord.status === 'confirmed' && 'Confirmado'}
+                          {ord.status === 'in_kitchen' && 'En cocina'}
+                          {ord.status === 'ready' && '¡Listo!'}
+                          {ord.status === 'delivered' && 'Servido'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        {(ord.items || []).map((it) => (
+                          <div key={it.id} className="flex justify-between items-center text-text-secondary">
+                            <span><strong className="text-white">{it.quantity}x</strong> {it.name_snapshot}</span>
+                            <span className="tabular-nums font-semibold">{formatPrice(it.unit_price_cents * it.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-surface-border flex justify-between font-extrabold text-xs text-brand-blue">
+                        <span>Subtotal comanda:</span>
+                        <span className="tabular-nums">{formatPrice(ord.total_cents)}</span>
+                      </div>
+
+                      {/* Botón rápido por comanda */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {ord.status === 'confirmed' && (
+                          <button
+                            onClick={() => handleUpdateStatus(ord.id, 'in_kitchen')}
+                            className="flex-1 py-1.5 bg-brand-amber text-black font-extrabold rounded-lg text-xs"
+                          >
+                            Mandar a cocina
+                          </button>
+                        )}
+                        {ord.status === 'ready' && (
+                          <button
+                            onClick={() => handleUpdateStatus(ord.id, 'delivered')}
+                            className="flex-1 py-1.5 bg-brand-success text-white font-extrabold rounded-lg text-xs"
+                          >
+                            Servido a mesa
+                          </button>
+                        )}
+                        {ord.status === 'delivered' && (
+                          <button
+                            onClick={() => handleUpdateStatus(ord.id, 'closed')}
+                            className="flex-1 py-1.5 bg-surface-hover text-white font-bold rounded-lg text-xs border border-surface-border"
+                          >
+                            Cerrar comanda
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
-                  <div className="pt-2 border-t border-surface-border flex justify-between font-extrabold text-sm text-brand-blue">
-                    <span>Total acumulado:</span>
-                    <span className="tabular-nums">{formatPrice(selectedTable.order.total_cents)}</span>
+
+                  {/* Acciones Globales de la Mesa */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-surface-border">
+                    <button
+                      onClick={() => handlePrintTableTicket(tableOrders, selectedTable.table)}
+                      className="py-2.5 px-3 bg-surface hover:bg-surface-hover text-white rounded-xl border border-surface-border font-bold text-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Ticket mesa</span>
+                    </button>
+
+                    {allDelivered ? (
+                      <button
+                        onClick={() => handleCloseAllTableOrders(tableOrders)}
+                        className="py-2.5 px-3 bg-brand-blue hover:bg-brand-blue-hover text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md"
+                      >
+                        <ReceiptText className="w-4 h-4" />
+                        <span>Cerrar cuenta mesa</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handlePrintTableTicket(tableOrders, selectedTable.table)}
+                        className="py-2.5 px-3 bg-surface-subtle text-text-secondary hover:text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border border-surface-border"
+                      >
+                        <span>Pre-cuenta</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {/* Acciones de la comanda de la mesa */}
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <button
-                    onClick={() => {
-                      setTicketOrder(selectedTable.order!);
-                      setSelectedTable(null);
-                    }}
-                    className="py-2.5 px-3 bg-surface hover:bg-surface-hover text-white rounded-xl border border-surface-border font-bold text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Imprimir ticket</span>
-                  </button>
-
-                  {selectedTable.order.status === 'ready' && (
-                    <button
-                      onClick={() => handleUpdateStatus(selectedTable.order!.id, 'delivered')}
-                      className="py-2.5 px-3 bg-brand-success hover:bg-emerald-600 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Servido a mesa</span>
-                    </button>
-                  )}
-
-                  {selectedTable.order.status === 'delivered' && (
-                    <button
-                      onClick={() => handleUpdateStatus(selectedTable.order!.id, 'closed')}
-                      className="py-2.5 px-3 bg-brand-blue hover:bg-brand-blue-hover text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md"
-                    >
-                      <ReceiptText className="w-4 h-4" />
-                      <span>Cerrar cuenta</span>
-                    </button>
-                  )}
-
-                  {selectedTable.order.status === 'confirmed' && (
-                    <button
-                      onClick={() => handleUpdateStatus(selectedTable.order!.id, 'in_kitchen')}
-                      className="py-2.5 px-3 bg-brand-amber hover:bg-brand-amber-hover text-black rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md"
-                    >
-                      <ChefHat className="w-4 h-4" />
-                      <span>Mandar a cocina</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="py-8 text-center text-xs text-text-muted">
-                La mesa está libre actualmente. Cuando el comensal escanee el QR y pida, aparecerá aquí.
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}

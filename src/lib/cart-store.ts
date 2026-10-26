@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { OrderChannel, PaymentMethod } from './types';
+import { OrderChannel, PaymentMethod, OrderStatus } from './types';
 
 export interface CartItem {
   productId: string;
@@ -20,6 +20,16 @@ export interface CustomerInfo {
   notes?: string;
 }
 
+export interface ActiveOrderSummary {
+  id: string;
+  orderNumber?: string;
+  status: OrderStatus;
+  totalCents: number;
+  itemCount: number;
+  createdAt: string;
+  itemsSummary?: string;
+}
+
 interface CartState {
   merchantSlug: string | null;
   items: CartItem[];
@@ -27,13 +37,17 @@ interface CartState {
   tableId: string | null;
   tableNumber: number | null;
   tableLabel: string | null;
+  tableToken: string | null;
   deliveryFeeCents: number;
   customerInfo: CustomerInfo;
   paymentMethod: PaymentMethod;
+  activeOrders: ActiveOrderSummary[];
+  lastOrderId: string | null;
   
   // Acciones
   setMerchant: (slug: string, deliveryFeeCents: number) => void;
-  setTable: (id: string | null, number: number | null, label: string | null) => void;
+  setTable: (id: string | null, number: number | null, label: string | null, token?: string | null) => void;
+  clearTable: () => void;
   setChannel: (channel: OrderChannel) => void;
   addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number, notes?: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
@@ -42,6 +56,9 @@ interface CartState {
   clearCart: () => void;
   setCustomerInfo: (info: Partial<CustomerInfo>) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
+  addActiveOrder: (order: ActiveOrderSummary) => void;
+  updateActiveOrderStatus: (orderId: string, status: OrderStatus) => void;
+  clearActiveOrders: () => void;
 
   // Calculados
   getSubtotalCents: () => number;
@@ -58,6 +75,7 @@ export const useCartStore = create<CartState>()(
       tableId: null,
       tableNumber: null,
       tableLabel: null,
+      tableToken: null,
       deliveryFeeCents: 0,
       customerInfo: {
         name: '',
@@ -66,11 +84,13 @@ export const useCartStore = create<CartState>()(
         notes: '',
       },
       paymentMethod: 'mercadopago',
+      activeOrders: [],
+      lastOrderId: null,
 
       setMerchant: (slug, deliveryFeeCents) => {
         const current = get().merchantSlug;
         if (current && current !== slug) {
-          // Cambió de local: vaciar carrito
+          // Cambió de local: vaciar carrito y reiniciar mesa y pedidos
           set({
             merchantSlug: slug,
             deliveryFeeCents,
@@ -78,18 +98,31 @@ export const useCartStore = create<CartState>()(
             tableId: null,
             tableNumber: null,
             tableLabel: null,
+            tableToken: null,
+            activeOrders: [],
+            lastOrderId: null,
           });
         } else {
           set({ merchantSlug: slug, deliveryFeeCents });
         }
       },
 
-      setTable: (id, number, label) => {
+      setTable: (id, number, label, token = null) => {
         set({
           tableId: id,
           tableNumber: number,
           tableLabel: label,
+          tableToken: token || get().tableToken,
           channel: id ? 'salon' : get().channel,
+        });
+      },
+
+      clearTable: () => {
+        set({
+          tableId: null,
+          tableNumber: null,
+          tableLabel: null,
+          tableToken: null,
         });
       },
 
@@ -147,6 +180,26 @@ export const useCartStore = create<CartState>()(
 
       setPaymentMethod: (method) => {
         set({ paymentMethod: method });
+      },
+
+      addActiveOrder: (order) => {
+        const existing = get().activeOrders.filter((o) => o.id !== order.id);
+        set({
+          activeOrders: [order, ...existing],
+          lastOrderId: order.id,
+        });
+      },
+
+      updateActiveOrderStatus: (orderId, status) => {
+        set({
+          activeOrders: get().activeOrders.map((o) =>
+            o.id === orderId ? { ...o, status } : o
+          ),
+        });
+      },
+
+      clearActiveOrders: () => {
+        set({ activeOrders: [], lastOrderId: null });
       },
 
       getSubtotalCents: () => {

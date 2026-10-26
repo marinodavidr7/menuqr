@@ -34,6 +34,10 @@ export function CartSheet({
     deliveryFeeCents,
     customerInfo,
     paymentMethod,
+    tableId: storeTableId,
+    tableLabel: storeTableLabel,
+    activeOrders,
+    addActiveOrder,
     updateQuantity,
     removeItem,
     clearCart,
@@ -43,6 +47,9 @@ export function CartSheet({
     getSubtotalCents,
     getTotalCents,
   } = useCartStore();
+
+  const effectiveTableId = tableId || storeTableId;
+  const effectiveTableLabel = tableLabel || storeTableLabel;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +117,7 @@ export function CartSheet({
         body: JSON.stringify({
           merchantSlug,
           channel,
-          tableId: channel === 'salon' ? tableId : null,
+          tableId: channel === 'salon' ? effectiveTableId : null,
           customerName: customerInfo.name,
           customerPhone: customerInfo.phone,
           deliveryAddress: isDelivery ? customerInfo.deliveryAddress : null,
@@ -147,9 +154,20 @@ export function CartSheet({
         }
       }
 
+      // Registrar pedido activo en la sesión persistente
+      addActiveOrder({
+        id: data.orderId,
+        orderNumber: data.orderId.slice(-6).toUpperCase(),
+        status: 'confirmed',
+        totalCents: total,
+        itemCount: items.reduce((sum, i) => sum + i.quantity, 0),
+        createdAt: new Date().toISOString(),
+        itemsSummary: items.map((i) => `${i.quantity}x ${i.name}`).join(', '),
+      });
+
       clearCart();
       onClose();
-      onShowToast('¡Tu pedido fue recibido y ya está marchando!');
+      onShowToast(effectiveTableLabel ? `¡Comanda para ${effectiveTableLabel} marchando!` : '¡Tu pedido fue recibido y ya está marchando!');
       router.push(`/${merchantSlug}/pedido/${data.orderId}`);
     } catch (err: any) {
       setError(err.message || 'Error de conexión');
@@ -222,7 +240,7 @@ export function CartSheet({
                     : 'bg-surface-subtle border-surface-border text-text-secondary hover:text-white'
                 }`}
               >
-                Salón {tableLabel ? `(${tableLabel})` : ''}
+                Salón {effectiveTableLabel ? `(${effectiveTableLabel})` : ''}
               </button>
               <button
                 type="button"
@@ -247,6 +265,20 @@ export function CartSheet({
                 Take Away (Retiro)
               </button>
             </div>
+
+            {channel === 'salon' && effectiveTableLabel && (
+              <div className="mt-2.5 p-2.5 bg-brand-blue/10 border border-brand-blue/30 rounded-xl flex items-center justify-between text-xs text-brand-blue">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />
+                  <span className="font-bold">Mesa asignada: {effectiveTableLabel}</span>
+                </div>
+                {activeOrders.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-md bg-brand-amber/20 text-brand-amber font-bold text-[10px]">
+                    + Tanda adicional (#{activeOrders.length + 1})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Lista de Platos */}

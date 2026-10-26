@@ -51,16 +51,37 @@ function MerchantMenuContent({ params }: PageProps) {
   const [callModal, setCallModal] = useState<'waiter' | 'bill' | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Mesa activa si vino por URL con ?mesa=<qr_token>
-  const activeTable = useMemo(() => {
-    if (!mesaToken || tables.length === 0) return null;
-    return tables.find((t) => t.qr_token === mesaToken) || null;
-  }, [mesaToken, tables]);
-
+  const storeTableId = useCartStore((s) => s.tableId);
+  const storeTableLabel = useCartStore((s) => s.tableLabel);
+  const storeTableToken = useCartStore((s) => s.tableToken);
+  const activeOrders = useCartStore((s) => s.activeOrders);
+  const clearTable = useCartStore((s) => s.clearTable);
   const setMerchantCart = useCartStore((s) => s.setMerchant);
   const setTableCart = useCartStore((s) => s.setTable);
   const cartItemCount = useCartStore((s) => s.getItemCount());
   const cartTotal = useCartStore((s) => s.getTotalCents());
+
+  // Mesa activa: prioriza el QR escaneado en la URL y, si no está en la URL, restaura la mesa persistente de la sesión
+  const activeTable = useMemo(() => {
+    if (tables.length === 0) return null;
+    if (mesaToken) {
+      const match = tables.find((t) => t.qr_token === mesaToken);
+      if (match) return match;
+    }
+    if (storeTableToken) {
+      const match = tables.find((t) => t.qr_token === storeTableToken);
+      if (match) return match;
+    }
+    if (storeTableId) {
+      const match = tables.find((t) => t.id === storeTableId);
+      if (match) return match;
+    }
+    if (storeTableLabel) {
+      const match = tables.find((t) => t.label === storeTableLabel);
+      if (match) return match;
+    }
+    return null;
+  }, [mesaToken, tables, storeTableToken, storeTableId, storeTableLabel]);
 
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
@@ -85,10 +106,10 @@ function MerchantMenuContent({ params }: PageProps) {
       .finally(() => setLoading(false));
   }, [slug, setMerchantCart]);
 
-  // Si detectó mesa por QR token, fijarla en el carrito
+  // Si detectó mesa activa, garantizar que esté sincronizada en el storage persistente
   useEffect(() => {
     if (activeTable) {
-      setTableCart(activeTable.id, activeTable.number, activeTable.label);
+      setTableCart(activeTable.id, activeTable.number, activeTable.label, activeTable.qr_token);
     }
   }, [activeTable, setTableCart]);
 
@@ -152,6 +173,46 @@ function MerchantMenuContent({ params }: PageProps) {
         <div className="bg-brand-amber/20 border-b border-brand-amber/30 px-4 py-2.5 text-center text-xs font-semibold text-brand-amber flex items-center justify-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           <span>El local se encuentra cerrado en este momento. Podés recorrer la carta pero los pedidos están pausados.</span>
+        </div>
+      )}
+
+      {/* Barra Persistente de Mesa Activa y Comandas en Marcha */}
+      {activeTable && (
+        <div className="bg-[#0e172a] border-b border-brand-blue/30 px-3 sm:px-6 py-2.5">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-pulse flex-shrink-0" />
+              <span className="font-extrabold text-white">
+                Mesa actual: <span className="text-brand-amber font-black">{activeTable.label}</span>
+              </span>
+              <span className="text-text-muted text-[11px] hidden sm:inline">
+                · Los pedidos que hagas se enviarán directo a esta mesa
+              </span>
+              <button
+                type="button"
+                onClick={() => clearTable()}
+                className="text-[11px] text-text-muted hover:text-white underline ml-1"
+                title="Cambiar o liberar mesa"
+              >
+                (Cambiar mesa)
+              </button>
+            </div>
+
+            {activeOrders.length > 0 && (
+              <div className="flex items-center gap-2 bg-surface-subtle px-3 py-1.5 rounded-xl border border-surface-border">
+                <span className="text-text-secondary text-[11px]">
+                  🛎️ {activeOrders.length} {activeOrders.length === 1 ? 'comanda marchando' : 'comandas marchando'} ({activeOrders[0].orderNumber || activeOrders[0].id.slice(-6).toUpperCase()})
+                </span>
+                <Link
+                  href={`/${merchant.slug}/pedido/${activeOrders[0].id}`}
+                  className="px-2.5 py-1 rounded-lg bg-brand-blue hover:bg-brand-blue-hover text-white font-bold text-[11px] flex items-center gap-1 transition-colors shadow-sm ml-1"
+                >
+                  <span>Ver estado en vivo</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -359,7 +420,7 @@ function MerchantMenuContent({ params }: PageProps) {
               <span className="w-7 h-7 rounded-full bg-white text-brand-blue flex items-center justify-center text-xs font-black shadow-inner">
                 {cartItemCount}
               </span>
-              <span>Ver mi pedido</span>
+              <span>Ver mi pedido {activeTable ? `(${activeTable.label})` : ''}</span>
             </div>
             <span className="tabular-nums font-black text-white text-base">
               {formatPrice(cartTotal)}
