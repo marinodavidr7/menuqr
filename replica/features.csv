@@ -1,0 +1,37 @@
+feature,area,priority,original,clone,notes
+Carta pública por slug del local (/resto4d),carta,must,yes,no,S04; SSR o prerender para SEO
+Categorías con navegación por tabs y anclas,carta,must,yes,no,S04 tabs con chevrons
+Buscador de productos dentro de la carta,carta,must,yes,no,app bar de S04
+Ficha del comercio (logo rating horario delivery),carta,must,yes,no,sidebar S04
+Card de producto con precio en ARS y foto,carta,must,yes,no,S05
+Favoritos con corazón,carta,should,yes,no,requiere sesión o localStorage
+Badge 3D en los platos,carta,must,yes,no,ícono cubo en la card
+Visor 3D con órbita del plato,4d,must,yes,no,three.js + glb; no se replica el pipeline de generación
+Modo video del plato,4d,should,yes,no,mp4 corto en lugar de 3D
+AR: plato sobre la mesa en tamaño real,4d,could,yes,no,WebXR en Android; iOS requiere USDZ y Quick Look
+Pedido desde la mesa (QR),pedidos,must,yes,no,F02; mesa identificada por qr_token
+Login/registro con email o Google,cuentas,must,yes,no,S02 S03; gate antes de pedir
+Llamar al mozo desde la carta,pedidos,should,yes,no,F03
+Pedir la cuenta desde la carta,pedidos,should,yes,no,F03
+Carrito y checkout con datos de entrega,pedidos,must,yes,no,no visto sin cuenta; inferido del flujo de marketing
+Directorio de comercios con búsqueda y orden,directorio,must,yes,no,S01; orden por rating nombre recientes paginado 12/24/48
+Alta de comercio (onboarding),onboarding,must,yes,no,S13; requiere cuenta de comercio
+Panel: pedidos por mesa en vivo,panel,must,yes,no,S07; tiempo real
+Panel: cocina con comandas y botón Listo,panel,must,yes,no,S08; timer por pedido
+Panel: caja con apertura cierre y arqueo por medio de pago,panel,must,yes,no,S09
+Panel: métricas (vistas ranking 3D ticket horas pico),panel,should,yes,no,S10
+Panel: reservas con confirmar/rechazar,panel,should,yes,no,S11
+Panel: editor de carta con precio y toggle de stock,panel,must,yes,no,S12
+Roles: dueño encargado mozo cocina,panel,should,yes,no,mencionado en marketing
+Canales: salón delivery y take away,pedidos,must,yes,no,S07 filas de los tres canales
+Estados de pedido (confirmado en cocina en camino cuenta cerrado),pedidos,must,yes,no,chips de S07
+Aviso automático al cliente en reservas,notificaciones,could,yes,no,email o WhatsApp
+Pagos con Mercado Pago (Checkout API) sin comisión,payments,should,yes,no,API oficial con credenciales del local
+QR por mesa generado y descargable,onboarding,must,yes,no,PNG/PDF por mesa
+Generación de modelo 3D desde una foto,4d,skip,yes,no,propietario: usar Luma AI / Tripo / Meshy o glb propios
+Reseñas y rating de comensales,reseñas,could,yes,no,4.3 (818) en S01/S04; pantalla no vista
+Calculadora de ingresos en el sitio de marketing,marketing,could,yes,no,en menu4d.com.ar
+Facturación electrónica,admin,skip,no,skip,el original tampoco la tiene (FAQ)
+Contenido y assets del original (fotos modelos 3D logo),contenido,skip,no,skip,propiedad de Menu4D y de sus locales
+Datos de la red (locales reseñas historial),datos,skip,no,skip,no es replicable
+App de escritorio / Tauri,mobile,could,no,skip,no aplica: la carta es web sin instalar nada
