@@ -59,7 +59,7 @@ export function Navbar({
 
   return (
     <header className="sticky top-0 z-40 bg-[#0B1220]/95 backdrop-blur-md border-b border-surface-border safe-top">
-      <div className="max-w-7xl mx-auto px-4 min-h-[56px] py-1 flex items-center justify-between gap-3">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 min-h-[56px] py-1 flex items-center justify-between gap-3">
         {/* Logo y Nombre del local */}
         <div className="flex items-center gap-3">
           <Link href="/" className="min-h-[44px] flex items-center gap-2 group">

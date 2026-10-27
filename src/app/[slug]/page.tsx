@@ -178,8 +178,8 @@ function MerchantMenuContent({ params }: PageProps) {
 
       {/* Barra Persistente de Mesa Activa y Comandas en Marcha */}
       {activeTable && (
-        <div className="bg-[#0e172a] border-b border-brand-blue/30 px-3 sm:px-6 py-2.5">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+        <div className="bg-[#0e172a] border-b border-brand-blue/30 px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-2.5">
+          <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-brand-success animate-pulse flex-shrink-0" />
               <span className="font-extrabold text-white">
@@ -216,10 +216,10 @@ function MerchantMenuContent({ params }: PageProps) {
         </div>
       )}
 
-      {/* Contenedor Principal (Sidebar Desktop + Carta) */}
-      <div className="max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col lg:flex-row gap-6">
+      {/* Contenedor Principal (Sidebar Desktop + Carta) - 100% Fluido a lo ancho */}
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-4 sm:py-6 flex flex-col lg:flex-row gap-6 lg:gap-8">
         {/* Sidebar en Desktop / Ficha en Mobile */}
-        <aside className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-4">
+        <aside className="w-full lg:w-80 xl:w-96 flex-shrink-0 flex flex-col gap-4">
           <div className="bg-surface border border-surface-border rounded-2xl overflow-hidden shadow-sm">
             {/* Foto de portada */}
             <div className="relative w-full aspect-[16/9] bg-surface-subtle">
@@ -393,9 +393,9 @@ function MerchantMenuContent({ params }: PageProps) {
             </div>
           )}
 
-          {/* Grilla de Platos: Mobile 2 col, Desktop 3 col */}
+          {/* Grilla de Platos: 100% Adaptativa y fluida a todo el ancho */}
           {filteredProducts.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
               {filteredProducts.map((product) => (
                 <ProductCard
                   key={product.id}
